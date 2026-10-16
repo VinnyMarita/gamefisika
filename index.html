@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0e27">
+<title>Master of 2D Motion - Fisika 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0e27; color: #fff; user-select: none;
+    touch-action: none;
+  }
+  #canvas-container { position: fixed; inset: 0; z-index: 1; }
+  canvas { display: block; }
+
+  /* ==== HUD ==== */
+  .hud {
+    position: fixed; z-index: 20; pointer-events: none;
+    font-size: 12px; font-weight: 600;
+  }
+  .hud-top {
+    top: 10px; left: 10px; right: 10px;
+    display: flex; justify-content: space-between; gap: 8px;
+  }
+  .hud-badge {
+    background: rgba(10, 14, 39, 0.85);
+    border: 1.5px solid #00d4ff;
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: #00d4ff;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .hud-badge.gold { border-color: #ffb800; color: #ffb800; box-shadow: 0 0 15px rgba(255, 184, 0, 0.3); }
+  .hud-badge span { color: #fff; }
+
+  /* ==== D-Pad (Tombol Panah) ==== */
+  #dpad {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 180px;
+    height: 180px;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 6px;
+    pointer-events: auto;
+    user-select: none;
+  }
+  .dpad-btn {
+    background: rgba(0, 212, 255, 0.12);
+    border: 2px solid rgba(0, 212, 255, 0.5);
+    border-radius: 14px;
+    color: #00d4ff;
+    font-size: 26px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: all 0.08s ease;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  .dpad-btn.pressed {
+    background: rgba(0, 212, 255, 0.5);
+    border-color: #00d4ff;
+    color: #fff;
+    transform: scale(0.92);
+    box-shadow: 0 0 25px rgba(0, 212, 255, 0.9);
+  }
+  #dpad-up    { grid-column: 2; grid-row: 1; }
+  #dpad-left  { grid-column: 1; grid-row: 2; }
+  #dpad-center{
+    grid-column: 2; grid-row: 2;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    pointer-events: none;
+    font-size: 14px;
+    color: rgba(0, 212, 255, 0.35);
+  }
+  #dpad-right { grid-column: 3; grid-row: 2; }
+  #dpad-down  { grid-column: 2; grid-row: 3; }
+
+  @media (max-width: 360px) {
+    #dpad { width: 150px; height: 150px; }
+    .dpad-btn { font-size: 22px; border-radius: 12px; }
+  }
+
+  /* ==== Action Buttons ==== */
+  .action-btn {
+    position: fixed; z-index: 30;
+    width: 65px; height: 65px;
+    border-radius: 50%;
+    border: 2px solid #00d4ff;
+    background: rgba(0, 212, 255, 0.15);
+    color: #00d4ff;
+    font-size: 24px;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    transition: all 0.15s;
+    pointer-events: auto;
+  }
+  .action-btn:active { transform: scale(0.9); background: rgba(0, 212, 255, 0.4); }
+  #btn-interact { bottom: 30px; right: 25px; }
+  #btn-jump { bottom: 105px; right: 25px; width: 55px; height: 55px; font-size: 20px; border-color: #ffb800; color: #ffb800; box-shadow: 0 0 20px rgba(255, 184, 0, 0.3); }
+
+  /* ==== Panels / Modals ==== */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: flex-end; justify-content: center;
+    padding: 0;
+  }
+  .modal-overlay.active { display: flex; animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal {
+    width: 100%; max-width: 600px;
+    max-height: 85vh;
+    background: linear-gradient(180deg, #0f1533 0%, #0a0e27 100%);
+    border-radius: 24px 24px 0 0;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-bottom: none;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  .modal-header {
+    padding: 16px 20px;
+    background: linear-gradient(90deg, rgba(0, 212, 255, 0.15), transparent);
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .modal-header h2 {
+    font-size: 16px;
+    color: #00d4ff;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .close-btn {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none; color: #fff;
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .close-btn:active { background: rgba(255, 0, 0, 0.3); }
+
+  .modal-body {
+    padding: 20px; overflow-y: auto;
+    font-size: 14px; line-height: 1.6;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+  .modal-body::-webkit-scrollbar { width: 6px; }
+  .modal-body::-webkit-scrollbar-thumb { background: #00d4ff; border-radius: 3px; }
+  .modal-body::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+
+  .modal-footer {
+    padding: 12px 20px 20px;
+    border-top: 1px solid rgba(0, 212, 255, 0.15);
+    flex-shrink: 0;
+    display: flex; gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 14px 20px;
+    border: none; border-radius: 14px;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #00d4ff, #0099cc);
+    color: #0a0e27;
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.4);
+  }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  /* ==== Materi Content ==== */
+  .materi-section {
+    margin-bottom: 18px;
+    padding: 14px;
+    background: rgba(0, 212, 255, 0.05);
+    border-left: 3px solid #00d4ff;
+    border-radius: 8px;
+  }
+  .materi-section h3 {
+    color: #00d4ff; font-size: 14px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .materi-section p { font-size: 13px; color: #c8d4e8; }
+  .formula {
+    display: block;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 8px 0;
+    color: #ffb800;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    text-align: center;
+    border: 1px dashed rgba(255, 184, 0, 0.3);
+  }
+
+  /* ==== Simulation Controls ==== */
+  .sim-control { margin-bottom: 18px; }
+  .sim-control label {
+    display: flex; justify-content: space-between;
+    font-size: 13px; margin-bottom: 8px;
+    color: #c8d4e8;
+  }
+  .sim-control label strong { color: #00d4ff; font-size: 14px; }
+  input[type="range"] {
+    width: 100%; height: 6px;
+    -webkit-appearance: none;
+    background: rgba(0, 212, 255, 0.2);
+    border-radius: 3px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #00d4ff, #0088cc);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.8);
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px; height: 22px;
+    border-radius: 50%; border: none;
+    background: radial-gradient(circle, #00d4ff, #0088cc);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.8);
+  }
+  .sim-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 15px;
+  }
+  .stat-card {
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+  }
+  .stat-card .label { font-size: 10px; color: #8899bb; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .value { font-size: 16px; color: #00d4ff; font-weight: 700; margin-top: 2px; }
+
+  /* ==== Quiz ==== */
+  .quiz-progress-bar {
+    height: 6px; background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px; overflow: hidden; margin-bottom: 16px;
+  }
+  .quiz-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00d4ff, #ffb800);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .quiz-question {
+    font-size: 14px; font-weight: 600;
+    margin-bottom: 16px; line-height: 1.5;
+    padding: 12px;
+    background: rgba(0, 212, 255, 0.08);
+    border-radius: 10px;
+    border-left: 3px solid #00d4ff;
+  }
+  .quiz-option {
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .quiz-option .opt-letter {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(0, 212, 255, 0.2);
+    color: #00d4ff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px;
+    flex-shrink: 0;
+  }
+  .quiz-option:active { transform: scale(0.98); }
+  .quiz-option.selected {
+    background: rgba(0, 212, 255, 0.2);
+    border-color: #00d4ff;
+  }
+  .quiz-option.correct {
+    background: rgba(0, 255, 100, 0.2);
+    border-color: #00ff64;
+  }
+  .quiz-option.correct .opt-letter { background: #00ff64; color: #0a0e27; }
+  .quiz-option.wrong {
+    background: rgba(255, 60, 60, 0.2);
+    border-color: #ff3c3c;
+  }
+  .quiz-option.wrong .opt-letter { background: #ff3c3c; color: #fff; }
+  .quiz-option.disabled { pointer-events: none; opacity: 0.7; }
+
+  .feedback-box {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    display: none;
+    animation: fadeIn 0.3s;
+  }
+  .feedback-box.show { display: block; }
+  .feedback-box.correct {
+    background: rgba(0, 255, 100, 0.1);
+    border: 1px solid #00ff64;
+    color: #a8ffc8;
+  }
+  .feedback-box.wrong {
+    background: rgba(255, 60, 60, 0.1);
+    border: 1px solid #ff3c3c;
+    color: #ffb8b8;
+  }
+
+  /* ==== Reward ==== */
+  .reward-container {
+    text-align: center;
+    padding: 20px 10px;
+  }
+  .reward-badge {
+    font-size: 80px;
+    margin-bottom: 15px;
+    display: inline-block;
+    animation: badgePop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    filter: drop-shadow(0 0 30px gold);
+  }
+  @keyframes badgePop {
+    0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  .reward-title {
+    font-size: 22px;
+    background: linear-gradient(90deg, #ffb800, #ffed4e, #ffb800);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+  .reward-desc { font-size: 13px; color: #c8d4e8; line-height: 1.6; }
+
+  /* ==== Toast ==== */
+  #toast {
+    position: fixed; top: 80px; left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: rgba(10, 14, 39, 0.95);
+    border: 1px solid #00d4ff;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 20px;
+    font-size: 12px;
+    z-index: 200;
+    opacity: 0; pointer-events: none;
+    transition: all 0.3s;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+    max-width: 85%; text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.warn { border-color: #ffb800; box-shadow: 0 0 20px rgba(255, 184, 0, 0.4); }
+
+  /* ==== Loading ==== */
+  #loading {
+    position: fixed; inset: 0;
+    background: #0a0e27;
+    z-index: 500;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px;
+    transition: opacity 0.5s;
+  }
+  #loading.hide { opacity: 0; pointer-events: none; }
+  .loader-ring {
+    width: 50px; height: 50px;
+    border: 3px solid rgba(0, 212, 255, 0.2);
+    border-top-color: #00d4ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { color: #00d4ff; font-size: 13px; }
+
+  /* ==== Desktop hint ==== */
+  .desktop-hint {
+    position: fixed; bottom: 20px; right: 20px;
+    font-size: 11px; color: #556688;
+    z-index: 20; text-align: right;
+    line-height: 1.5;
+    display: none;
+  }
+  @media (min-width: 768px) {
+    #dpad { display: none; }
+    #btn-interact, #btn-jump { display: none; }
+    .desktop-hint { display: block; }
+    .modal { border-radius: 20px; margin-bottom: 20px; max-height: 80vh; }
+    .modal-overlay { align-items: center; padding: 20px; }
+  }
+
+  /* ==== Location marker (3D) ==== */
+  .loc-label {
+    background: rgba(10, 14, 39, 0.9);
+    border: 1.5px solid #00d4ff;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 11px;
+    color: #00d4ff;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+  }
+  .loc-label.gold { border-color: #ffb800; color: #ffb800; box-shadow: 0 0 15px rgba(255, 184, 0, 0.5); }
+  .loc-label.pink { border-color: #ff55aa; color: #ff55aa; box-shadow: 0 0 15px rgba(255, 85, 170, 0.5); }
+  .loc-label.green { border-color: #00ff88; color: #00ff88; box-shadow: 0 0 15px rgba(0, 255, 136, 0.5); }
+</style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading">
+  <div class="loader-ring"></div>
+  <p>Memuat dunia 3D...</p>
+</div>
+
+<!-- 3D Canvas -->
+<div id="canvas-container"></div>
+
+<!-- HUD -->
+<div class="hud hud-top">
+  <div class="hud-badge">📍 <span id="hud-location">Area Terbuka</span></div>
+  <div class="hud-badge gold">🏆 <span id="hud-progress">0/10</span></div>
+</div>
+
+<!-- D-Pad: Tombol Panah -->
+<div id="dpad">
+  <div class="dpad-btn" id="dpad-up"    data-dir="up">▲</div>
+  <div class="dpad-btn" id="dpad-left"  data-dir="left">◀</div>
+  <div class="dpad-btn" id="dpad-center">✦</div>
+  <div class="dpad-btn" id="dpad-right" data-dir="right">▶</div>
+  <div class="dpad-btn" id="dpad-down"  data-dir="down">▼</div>
+</div>
+
+<!-- Action Buttons -->
+<div class="action-btn" id="btn-interact">✦</div>
+<div class="action-btn" id="btn-jump">⤒</div>
+
+<!-- Desktop hint -->
+<div class="desktop-hint">
+  WASD: Bergerak &nbsp;|&nbsp; Klik & Drag: Kamera<br>
+  Tekan E: Interaksi &nbsp;|&nbsp; Scroll: Zoom
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ============ MODALS ============ -->
+
+<!-- Modal Materi -->
+<div class="modal-overlay" id="modal-materi">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📘 Materi: Gerak Dua Dimensi</h2>
+      <button class="close-btn" onclick="closeModal('modal-materi')">✕</button>
+    </div>
+    <div class="modal-body" id="materi-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="btn-mark-read">✓ Tandai Sudah Dibaca</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Simulasi -->
+<div class="modal-overlay" id="modal-simulasi">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🚀 Simulasi Gerak Parabola</h2>
+      <button class="close-btn" onclick="closeModal('modal-simulasi')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="sim-control">
+        <label>Kecepatan Awal (v₀) <strong id="lbl-v0">20 m/s</strong></label>
+        <input type="range" id="slider-v0" min="5" max="50" step="1" value="20">
+      </div>
+      <div class="sim-control">
+        <label>Sudut Peluncuran (θ) <strong id="lbl-angle">45°</strong></label>
+        <input type="range" id="slider-angle" min="10" max="80" step="1" value="45">
+      </div>
+      <button class="btn btn-primary" id="btn-launch" style="margin-top: 8px;">🚀 Luncurkan Bola</button>
+      <div class="sim-stats">
+        <div class="stat-card"><div class="label">Tinggi Maks</div><div class="value" id="stat-h">0 m</div></div>
+        <div class="stat-card"><div class="label">Jangkauan</div><div class="value" id="stat-r">0 m</div></div>
+        <div class="stat-card"><div class="label">Waktu Terbang</div><div class="value" id="stat-t">0 s</div></div>
+        <div class="stat-card"><div class="label">Kecepatan Awal</div><div class="value" id="stat-v">20 m/s</div></div>
+      </div>
+      <p style="font-size: 11px; color: #8899bb; margin-top: 12px; text-align: center;">
+        Gravitasi g = 9.8 m/s² • Lintasan ditampilkan di dunia 3D
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Kuis -->
+<div class="modal-overlay" id="modal-kuis">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>❓ Kuis <span id="quiz-num" style="color: #ffb800;">1/10</span></h2>
+      <button class="close-btn" onclick="closeModal('modal-kuis')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="quiz-progress-bar"><div class="quiz-progress-fill" id="quiz-progress-fill" style="width: 0%"></div></div>
+      <div class="quiz-question" id="quiz-question"></div>
+      <div id="quiz-options"></div>
+      <div class="feedback-box" id="quiz-feedback"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-kuis')">Tutup</button>
+      <button class="btn btn-primary" id="btn-submit-quiz" disabled>Jawab</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Reward -->
+<div class="modal-overlay" id="modal-reward">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🏆 Selamat!</h2>
+    </div>
+    <div class="modal-body">
+      <div class="reward-container">
+        <div class="reward-badge">🏅</div>
+        <div class="reward-title">Master of 2D Motion</div>
+        <div class="reward-desc">
+          Kamu telah menyelesaikan seluruh 10 soal kuis dengan benar!<br><br>
+          Kamu memahami konsep gerak dua dimensi, gerak parabola, komponen kecepatan, gravitasi, waktu tempuh, ketinggian maksimum, dan jangkauan horizontal. 🎓
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="resetGame()">🔄 Main Lagi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LIBRARIES ============ -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* =========================================================
+   1. DATA MATERI (JSON)
+   ========================================================= */
+const MATERI = {
+  title: "Gerak Dua Dimensi",
+  sections: [
+    {
+      icon: "🎯",
+      heading: "Konsep Gerak Dua Dimensi",
+      content: "Gerak dua dimensi adalah gerak benda pada bidang datar (sumbu x dan y). Contoh utamanya adalah <b>gerak parabola</b>, yaitu gerak benda yang dilempar dengan sudut tertentu terhadap horizontal. Gerak ini adalah gabungan dari GLB (horizontal) dan GLBB (vertikal)."
+    },
+    {
+      icon: "🌊",
+      heading: "Gerak Parabola",
+      content: "Gerak parabola terjadi ketika objek dilempar dengan kecepatan awal v₀ dan sudut elevasi θ. Lintasannya melengkung membentuk parabola.",
+      formulas: ["v₀ₓ = v₀ · cos θ", "v₀ᵧ = v₀ · sin θ"]
+    },
+    {
+      icon: "➡️",
+      heading: "Komponen Kecepatan",
+      content: "Pada sumbu x (horizontal): kecepatan konstan karena tidak ada percepatan. Pada sumbu y (vertikal): kecepatan berubah karena gravitasi.",
+      formulas: ["vₓ = v₀ₓ (konstan)", "vᵧ = v₀ᵧ − g·t"]
+    },
+    {
+      icon: "🌍",
+      heading: "Gravitasi",
+      content: "Percepatan gravitasi g = 9.8 m/s² berarah ke bawah. Gravitasi hanya memengaruhi gerak vertikal, tidak memengaruhi gerak horizontal.",
+      formulas: ["g = 9.8 m/s²"]
+    },
+    {
+      icon: "⏱️",
+      heading: "Waktu Tempuh (Waktu Terbang)",
+      content: "Waktu yang dibutuhkan benda untuk kembali ke tanah sejak diluncurkan.",
+      formulas: ["t_total = 2 · v₀ᵧ / g"]
+    },
+    {
+      icon: "⛰️",
+      heading: "Ketinggian Maksimum",
+      content: "Titik tertinggi yang dicapai benda. Di titik ini, kecepatan vertikal vᵧ = 0.",
+      formulas: ["h_max = v₀ᵧ² / (2g)"]
+    },
+    {
+      icon: "📏",
+      heading: "Jangkauan Horizontal",
+      content: "Jarak horizontal maksimum yang dicapai benda. Jangkauan maksimum terjadi saat sudut θ = 45°.",
+      formulas: ["R = v₀² · sin(2θ) / g"]
+    }
+  ]
+};
+
+/* =========================================================
+   2. DATA KUIS (JSON - 10 soal)
+   ========================================================= */
+const KUIS = [
+  {
+    q: "Sebuah bola ditendang dengan v₀ = 20 m/s pada sudut 30°. Berapakah komponen kecepatan awal horizontal (v₀ₓ)? (cos 30° = 0.866)",
+    opts: ["10 m/s", "17.32 m/s", "20 m/s", "8.66 m/s"],
+    ans: 1,
+    exp: "v₀ₓ = v₀ · cos θ = 20 × 0.866 = 17.32 m/s"
+  },
+  {
+    q: "Dari soal sebelumnya, berapakah komponen kecepatan awal vertikal (v₀ᵧ)? (sin 30° = 0.5)",
+    opts: ["10 m/s", "17.32 m/s", "20 m/s", "5 m/s"],
+    ans: 0,
+    exp: "v₀ᵧ = v₀ · sin θ = 20 × 0.5 = 10 m/s"
+  },
+  {
+    q: "Jika v₀ᵧ = 10 m/s dan g = 9.8 m/s², berapa waktu untuk mencapai titik tertinggi?",
+    opts: ["1.02 s", "2.04 s", "0.98 s", "1.5 s"],
+    ans: 0,
+    exp: "t_puncak = v₀ᵧ / g = 10 / 9.8 ≈ 1.02 s"
+  },
+  {
+    q: "Berapa ketinggian maksimum jika v₀ᵧ = 10 m/s dan g = 9.8 m/s²?",
+    opts: ["5.10 m", "10.2 m", "2.55 m", "4.9 m"],
+    ans: 0,
+    exp: "h_max = v₀ᵧ² / (2g) = 100 / 19.6 ≈ 5.10 m"
+  },
+  {
+    q: "Jangkauan horizontal (R) untuk v₀ = 20 m/s, θ = 30°, g = 9.8 m/s² (sin 60° = 0.866) adalah...",
+    opts: ["35.35 m", "40.82 m", "17.32 m", "20.41 m"],
+    ans: 0,
+    exp: "R = v₀² · sin(2θ) / g = 400 × 0.866 / 9.8 ≈ 35.35 m"
+  },
+  {
+    q: "Pada gerak parabola, kecepatan pada sumbu horizontal (vₓ)...",
+    opts: ["Berubah karena gravitasi", "Konstan", "Bertambah terus", "Berkurang terus"],
+    ans: 1,
+    exp: "Gravitasi hanya memengaruhi sumbu vertikal, sehingga vₓ konstan."
+  },
+  {
+    q: "Agar jangkauan horizontal maksimum, sudut elevasi yang tepat adalah...",
+    opts: ["30°", "45°", "60°", "90°"],
+    ans: 1,
+    exp: "Jangkauan maksimum saat sin(2θ) = 1, yaitu θ = 45°."
+  },
+  {
+    q: "Pada titik tertinggi gerak parabola, kecepatan yang bernilai nol adalah...",
+    opts: ["Kecepatan total", "Kecepatan horizontal", "Kecepatan vertikal", "Percepatan"],
+    ans: 2,
+    exp: "Di titik tertinggi, vᵧ = 0, tetapi vₓ tetap."
+  },
+  {
+    q: "Waktu total bola berada di udara jika v₀ᵧ = 10 m/s dan g = 9.8 m/s² adalah...",
+    opts: ["1.02 s", "2.04 s", "0.51 s", "4.08 s"],
+    ans: 1,
+    exp: "t_total = 2 × t_puncak = 2 × 1.02 = 2.04 s"
+  },
+  {
+    q: "Persamaan posisi vertikal (y) pada gerak parabola saat waktu t adalah...",
+    opts: ["y = v₀ᵧ·t + ½g·t²", "y = v₀ᵧ·t − ½g·t²", "y = v₀ₓ·t − ½g·t²", "y = v₀·t − ½g·t²"],
+    ans: 1,
+    exp: "Karena gravitasi ke bawah: y = v₀ᵧ·t − ½g·t²"
+  }
+];
+
+/* =========================================================
+   3. STATE GAME (disimpan ke localStorage)
+   ========================================================= */
+const DEFAULT_STATE = {
+  materiRead: false,
+  quizProgress: 0,
+  badgeEarned: false
+};
+
+let state = { ...DEFAULT_STATE };
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('fisika2d_state');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state = { ...DEFAULT_STATE, ...parsed };
+    }
+  } catch (e) { console.warn('Gagal load state', e); }
+  updateHUD();
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('fisika2d_state', JSON.stringify(state));
+  } catch (e) { console.warn('Gagal save state', e); }
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('hud-progress').textContent = `${state.quizProgress}/${KUIS.length}`;
+}
+
+/* =========================================================
+   4. TOAST & MODAL HELPERS
+   ========================================================= */
+let toastTimer;
+function showToast(msg, warn = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('warn', warn);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+window.closeModal = closeModal;
+
+/* =========================================================
+   5. RENDER MATERI
+   ========================================================= */
+function renderMateri() {
+  const body = document.getElementById('materi-body');
+  let html = '';
+  MATERI.sections.forEach(sec => {
+    html += `<div class="materi-section">
+      <h3>${sec.icon} ${sec.heading}</h3>
+      <p>${sec.content}</p>`;
+    if (sec.formulas) {
+      sec.formulas.forEach(f => html += `<span class="formula">${f}</span>`);
+    }
+    html += `</div>`;
+  });
+  body.innerHTML = html;
+
+  const btn = document.getElementById('btn-mark-read');
+  if (state.materiRead) {
+    btn.textContent = '✓ Sudah Dibaca';
+    btn.disabled = true;
+  } else {
+    btn.textContent = '✓ Tandai Sudah Dibaca';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('btn-mark-read').addEventListener('click', () => {
+  state.materiRead = true;
+  saveState();
+  showToast('Materi ditandai sudah dibaca! Kuis terbuka 🎉');
+  closeModal('modal-materi');
+});
+
+/* =========================================================
+   6. RENDER KUIS
+   ========================================================= */
+let currentQuizIdx = 0;
+let selectedOpt = -1;
+let quizLocked = false;
+
+function renderQuiz() {
+  if (state.quizProgress >= KUIS.length) {
+    openModal('modal-reward');
+    return;
+  }
+  currentQuizIdx = state.quizProgress;
+  const soal = KUIS[currentQuizIdx];
+
+  document.getElementById('quiz-num').textContent = `${currentQuizIdx + 1}/${KUIS.length}`;
+  document.getElementById('quiz-progress-fill').style.width = `${(currentQuizIdx / KUIS.length) * 100}%`;
+  document.getElementById('quiz-question').textContent = soal.q;
+  document.getElementById('quiz-feedback').classList.remove('show', 'correct', 'wrong');
+
+  const optContainer = document.getElementById('quiz-options');
+  optContainer.innerHTML = '';
+  soal.opts.forEach((opt, i) => {
+    const div = document.createElement('div');
+    div.className = 'quiz-option';
+    div.dataset.idx = i;
+    div.innerHTML = `<div class="opt-letter">${String.fromCharCode(65 + i)}</div><div>${opt}</div>`;
+    div.addEventListener('click', () => selectOption(i));
+    optContainer.appendChild(div);
+  });
+
+  selectedOpt = -1;
+  quizLocked = false;
+  const submitBtn = document.getElementById('btn-submit-quiz');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Jawab';
+  submitBtn.onclick = submitAnswer;
+}
+
+function selectOption(i) {
+  if (quizLocked) return;
+  selectedOpt = i;
+  document.querySelectorAll('.quiz-option').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.idx) === i);
+  });
+  document.getElementById('btn-submit-quiz').disabled = false;
+}
+
+function submitAnswer() {
+  if (quizLocked || selectedOpt === -1) return;
+  const soal = KUIS[currentQuizIdx];
+  const feedback = document.getElementById('quiz-feedback');
+  const allOpts = document.querySelectorAll('.quiz-option');
+
+  if (selectedOpt === soal.ans) {
+    quizLocked = true;
+    allOpts.forEach(el => {
+      el.classList.add('disabled');
+      if (parseInt(el.dataset.idx) === soal.ans) el.classList.add('correct');
+    });
+    feedback.className = 'feedback-box show correct';
+    feedback.innerHTML = `<b>✓ Benar!</b><br>${soal.exp}`;
+
+    state.quizProgress++;
+    saveState();
+
+    const btn = document.getElementById('btn-submit-quiz');
+    if (state.quizProgress >= KUIS.length) {
+      btn.textContent = '🏆 Ambil Reward';
+      btn.onclick = () => {
+        state.badgeEarned = true;
+        saveState();
+        closeModal('modal-kuis');
+        openModal('modal-reward');
+      };
+    } else {
+      btn.textContent = 'Soal Berikutnya →';
+      btn.onclick = renderQuiz;
+    }
+  } else {
+    allOpts.forEach(el => {
+      if (parseInt(el.dataset.idx) === selectedOpt) el.classList.add('wrong');
+    });
+    feedback.className = 'feedback-box show wrong';
+    feedback.innerHTML = `<b>✗ Salah!</b><br>Kamu harus mengulang soal ini sampai benar.<br><i>Petunjuk: ${soal.exp.split('.')[0]}...</i>`;
+    quizLocked = true;
+
+    setTimeout(() => {
+      allOpts.forEach(el => {
+        el.classList.remove('wrong', 'selected', 'disabled');
+      });
+      feedback.classList.remove('show');
+      selectedOpt = -1;
+      quizLocked = false;
+      document.getElementById('btn-submit-quiz').disabled = true;
+    }, 1800);
+  }
+}
+
+/* =========================================================
+   7. REWARD RESET
+   ========================================================= */
+function resetGame() {
+  state = { ...DEFAULT_STATE };
+  saveState();
+  closeModal('modal-reward');
+  showToast('Game direset! Selamat bermain lagi 🎮');
+}
+window.resetGame = resetGame;
+
+/* =========================================================
+   8. SIMULASI FISIKA
+   ========================================================= */
+const sliderV0 = document.getElementById('slider-v0');
+const sliderAngle = document.getElementById('slider-angle');
+const lblV0 = document.getElementById('lbl-v0');
+const lblAngle = document.getElementById('lbl-angle');
+
+sliderV0.addEventListener('input', () => { lblV0.textContent = sliderV0.value + ' m/s'; });
+sliderAngle.addEventListener('input', () => { lblAngle.textContent = sliderAngle.value + '°'; });
+
+document.getElementById('btn-launch').addEventListener('click', () => {
+  launchBall(parseFloat(sliderV0.value), parseFloat(sliderAngle.value));
+});
+
+/* =========================================================
+   9. THREE.JS SCENE
+   ========================================================= */
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0e27);
+scene.fog = new THREE.FogExp2(0x0a0e27, 0.018);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(0, 8, 14);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI / 2.15;
+controls.minDistance = 4;
+controls.maxDistance = 30;
+controls.target.set(0, 1.5, 0);
+controls.enablePan = false;
+
+/* =========================================================
+   10. LIGHTING
+   ========================================================= */
+scene.add(new THREE.AmbientLight(0x4466aa, 0.6));
+const hemiLight = new THREE.HemisphereLight(0x88aaff, 0x223344, 0.8);
+scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(10, 20, 8);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.left = -25;
+dirLight.shadow.camera.right = 25;
+dirLight.shadow.camera.top = 25;
+dirLight.shadow.camera.bottom = -25;
+dirLight.shadow.camera.far = 60;
+scene.add(dirLight);
+
+const pointLight = new THREE.PointLight(0x00d4ff, 0.8, 30);
+pointLight.position.set(0, 6, 0);
+scene.add(pointLight);
+
+/* =========================================================
+   11. DUNIA 3D
+   ========================================================= */
+const groundGeo = new THREE.CircleGeometry(40, 64);
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x1a2540, roughness: 0.9, metalness: 0.1
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(80, 40, 0x00d4ff, 0x1a3050);
+grid.material.opacity = 0.25;
+grid.material.transparent = true;
+grid.position.y = 0.01;
+scene.add(grid);
+
+const borderRing = new THREE.Mesh(
+  new THREE.RingGeometry(38, 39, 64),
+  new THREE.MeshBasicMaterial({ color: 0x00d4ff, side: THREE.DoubleSide, transparent: true, opacity: 0.4 })
+);
+borderRing.rotation.x = -Math.PI / 2;
+borderRing.position.y = 0.02;
+scene.add(borderRing);
+
+const particlesGeo = new THREE.BufferGeometry();
+const particleCount = 200;
+const positions = new Float32Array(particleCount * 3);
+for (let i = 0; i < particleCount * 3; i += 3) {
+  positions[i] = (Math.random() - 0.5) * 60;
+  positions[i + 1] = Math.random() * 15 + 1;
+  positions[i + 2] = (Math.random() - 0.5) * 60;
+}
+particlesGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const particles = new THREE.Points(
+  particlesGeo,
+  new THREE.PointsMaterial({ color: 0x00d4ff, size: 0.08, transparent: true, opacity: 0.5 })
+);
+scene.add(particles);
+
+/* =========================================================
+   12. DEKORASI: POHON & BATU
+   ========================================================= */
+function createTree(x, z) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.35, 1.8, 6),
+    new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.9 })
+  );
+  trunk.position.y = 0.9;
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+  g.add(trunk);
+
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x1a7744, roughness: 0.8, flatShading: true });
+  for (let i = 0; i < 3; i++) {
+    const leaf = new THREE.Mesh(
+      new THREE.ConeGeometry(1.1 - i * 0.25, 1.4, 7),
+      leafMat
+    );
+    leaf.position.y = 1.9 + i * 0.7;
+    leaf.castShadow = true;
+    g.add(leaf);
+  }
+  g.position.set(x, 0, z);
+  return g;
+}
+
+function createRock(x, z) {
+  const rock = new THREE.Mesh(
+    new THREE.DodecahedronGeometry(0.4 + Math.random() * 0.4, 0),
+    new THREE.MeshStandardMaterial({ color: 0x445577, roughness: 1, flatShading: true })
+  );
+  rock.position.set(x, 0.35, z);
+  rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+  rock.castShadow = true;
+  rock.receiveShadow = true;
+  return rock;
+}
+
+const decorPositions = [
+  [-14, -10], [14, -12], [-18, 12], [18, 14], [-10, 18], [10, -18],
+  [-22, 0], [22, 0], [0, -22], [0, 22]
+];
+decorPositions.forEach(([x, z], i) => {
+  scene.add(i % 2 === 0 ? createTree(x, z) : createRock(x, z));
+});
+
+/* =========================================================
+   13. LOKASI INTERAKTIF
+   ========================================================= */
+const LOCATIONS = [
+  { id: 'materi', name: 'Pusat Pelatihan', icon: '📘', pos: new THREE.Vector3(0, 0, -7), color: 0x00d4ff, labelClass: '' },
+  { id: 'simulasi', name: 'Area Simulasi', icon: '🚀', pos: new THREE.Vector3(-9, 0, 6), color: 0xffb800, labelClass: 'gold' },
+  { id: 'kuis', name: 'Ruang Kuis', icon: '❓', pos: new THREE.Vector3(9, 0, 6), color: 0xff55aa, labelClass: 'pink' }
+];
+
+LOCATIONS.forEach(loc => {
+  const group = new THREE.Group();
+  group.position.copy(loc.pos);
+
+  const platform = new THREE.Mesh(
+    new THREE.CylinderGeometry(2, 2.2, 0.4, 32),
+    new THREE.MeshStandardMaterial({
+      color: loc.color, emissive: loc.color, emissiveIntensity: 0.3,
+      roughness: 0.4, metalness: 0.5
+    })
+  );
+  platform.position.y = 0.2;
+  platform.castShadow = true;
+  platform.receiveShadow = true;
+  group.add(platform);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(2.4, 2.7, 48),
+    new THREE.MeshBasicMaterial({ color: loc.color, side: THREE.DoubleSide, transparent: true, opacity: 0.5 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  group.add(ring);
+
+  const pillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 1.2, 4, 8, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: loc.color, transparent: true, opacity: 0.15,
+      side: THREE.DoubleSide, depthWrite: false
+    })
+  );
+  pillar.position.y = 2.2;
+  group.add(pillar);
+
+  const icon = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.6),
+    new THREE.MeshStandardMaterial({ color: loc.color, emissive: loc.color, emissiveIntensity: 0.8 })
+  );
+  icon.position.y = 2.8;
+  icon.userData.floatOffset = Math.random() * Math.PI * 2;
+  group.add(icon);
+  loc.iconMesh = icon;
+
+  const labelDiv = document.createElement('div');
+  labelDiv.className = 'loc-label ' + loc.labelClass;
+  labelDiv.innerHTML = `${loc.icon} ${loc.name}`;
+  const label = new CSS2DObject(labelDiv);
+  label.position.set(0, 4.2, 0);
+  group.add(label);
+
+  scene.add(group);
+  loc.group = group;
+});
+
+/* =========================================================
+   14. KARAKTER PEMAIN
+   ========================================================= */
+const player = new THREE.Group();
+const playerMat = new THREE.MeshStandardMaterial({ color: 0x00d4ff, emissive: 0x004466, emissiveIntensity: 0.4, roughness: 0.4 });
+
+const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.55, 4, 12), playerMat);
+body.position.y = 0.9;
+body.castShadow = true;
+player.add(body);
+
+const head = new THREE.Mesh(
+  new THREE.SphereGeometry(0.32, 20, 20),
+  new THREE.MeshStandardMaterial({ color: 0xffeecc, roughness: 0.5 })
+);
+head.position.y = 1.65;
+head.castShadow = true;
+player.add(head);
+
+const visor = new THREE.Mesh(
+  new THREE.BoxGeometry(0.42, 0.12, 0.1),
+  new THREE.MeshStandardMaterial({ color: 0x00d4ff, emissive: 0x00d4ff, emissiveIntensity: 1 })
+);
+visor.position.set(0, 1.7, 0.28);
+player.add(visor);
+
+const playerRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.5, 0.7, 32),
+  new THREE.MeshBasicMaterial({ color: 0x00d4ff, side: THREE.DoubleSide, transparent: true, opacity: 0.6 })
+);
+playerRing.rotation.x = -Math.PI / 2;
+playerRing.position.y = 0.02;
+player.add(playerRing);
+
+player.position.set(0, 0, 0);
+scene.add(player);
+
+/* =========================================================
+   15. BOLA SIMULASI & TRAJECTORY
+   ========================================================= */
+const ball = new THREE.Mesh(
+  new THREE.SphereGeometry(0.35, 24, 24),
+  new THREE.MeshStandardMaterial({ color: 0xff5500, emissive: 0xff2200, emissiveIntensity: 0.5, roughness: 0.3 })
+);
+ball.castShadow = true;
+ball.visible = false;
+scene.add(ball);
+
+const trajGeo = new THREE.BufferGeometry();
+const trajMat = new THREE.LineBasicMaterial({ color: 0xffb800, linewidth: 2, transparent: true, opacity: 0.8 });
+const trajLine = new THREE.Line(trajGeo, trajMat);
+trajLine.visible = false;
+scene.add(trajLine);
+
+const trajDots = new THREE.Group();
+scene.add(trajDots);
+
+/* =========================================================
+   16. SIMULASI LOGIC
+   ========================================================= */
+let simActive = false;
+let simStartTime = 0;
+let simV0x = 0, simV0y = 0;
+let simStartPos = new THREE.Vector3();
+let simFlightTime = 0;
+let simElapsed = 0;
+
+function launchBall(v0, angleDeg) {
+  const angleRad = angleDeg * Math.PI / 180;
+  const g = 9.8;
+  simV0x = v0 * Math.cos(angleRad);
+  simV0y = v0 * Math.sin(angleRad);
+
+  const hMax = (simV0y * simV0y) / (2 * g);
+  simFlightTime = (2 * simV0y) / g;
+  const range = simV0x * simFlightTime;
+
+  document.getElementById('stat-h').textContent = hMax.toFixed(2) + ' m';
+  document.getElementById('stat-r').textContent = range.toFixed(2) + ' m';
+  document.getElementById('stat-t').textContent = simFlightTime.toFixed(2) + ' s';
+  document.getElementById('stat-v').textContent = v0 + ' m/s';
+
+  const simLoc = LOCATIONS.find(l => l.id === 'simulasi');
+  simStartPos.copy(simLoc.pos);
+  simStartPos.y = 0.5;
+
+  ball.position.copy(simStartPos);
+  ball.visible = true;
+
+  const points = [];
+  const steps = 80;
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * simFlightTime;
+    const x = simV0x * t;
+    const y = simV0y * t - 0.5 * g * t * t;
+    if (y >= -0.1) {
+      points.push(new THREE.Vector3(simStartPos.x + x, simStartPos.y + Math.max(0, y), simStartPos.z));
+    }
+  }
+  trajGeo.setFromPoints(points);
+  trajLine.visible = true;
+
+  trajDots.clear();
+  for (let i = 0; i < points.length; i += 6) {
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.08, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffb800 })
+    );
+    dot.position.copy(points[i]);
+    trajDots.add(dot);
+  }
+
+  simActive = true;
+  simStartTime = performance.now();
+  simElapsed = 0;
+}
+
+function updateSimulation(now) {
+  if (!simActive) return;
+  simElapsed = (now - simStartTime) / 1000;
+  const t = simElapsed;
+  const g = 9.8;
+
+  if (t > simFlightTime + 0.3) {
+    simActive = false;
+    ball.visible = false;
+    return;
+  }
+
+  const x = simV0x * t;
+  const y = simV0y * t - 0.5 * g * t * t;
+
+  ball.position.set(
+    simStartPos.x + x,
+    simStartPos.y + Math.max(0, y),
+    simStartPos.z
+  );
+}
+
+/* =========================================================
+   17. KONTROL PEMAIN (Keyboard + D-Pad)
+   ========================================================= */
+const keys = { w: false, a: false, s: false, d: false };
+const dpadState = { up: false, down: false, left: false, right: false };
+const playerSpeed = 5.5;
+const playerBounds = 32;
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['w', 'a', 's', 'd'].includes(k)) keys[k] = true;
+  if (k === 'e') tryInteract();
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (['w', 'a', 's', 'd'].includes(k)) keys[k] = false;
+});
+
+// D-Pad (Tombol Panah)
+const dpadButtons = document.querySelectorAll('.dpad-btn[data-dir]');
+
+function setDpad(dir, pressed) {
+  dpadState[dir] = pressed;
+  const btn = document.querySelector(`.dpad-btn[data-dir="${dir}"]`);
+  if (btn) btn.classList.toggle('pressed', pressed);
+}
+
+dpadButtons.forEach(btn => {
+  const dir = btn.dataset.dir;
+
+  // Touch (HP) — multi-touch didukung
+  btn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    setDpad(dir, true);
+  }, { passive: false });
+
+  btn.addEventListener('touchend', e => {
+    e.preventDefault();
+    setDpad(dir, false);
+  }, { passive: false });
+
+  btn.addEventListener('touchcancel', e => {
+    e.preventDefault();
+    setDpad(dir, false);
+  }, { passive: false });
+
+  // Mouse (desktop, untuk testing)
+  btn.addEventListener('mousedown', e => {
+    e.preventDefault();
+    setDpad(dir, true);
+  });
+  btn.addEventListener('mouseup', () => setDpad(dir, false));
+  btn.addEventListener('mouseleave', () => setDpad(dir, false));
+});
+
+// Reset semua tombol jika kehilangan fokus
+window.addEventListener('blur', () => {
+  setDpad('up', false);
+  setDpad('down', false);
+  setDpad('left', false);
+  setDpad('right', false);
+});
+
+/* =========================================================
+   18. INTERAKSI
+   ========================================================= */
+let nearbyLocation = null;
+
+function checkNearby() {
+  let closest = null;
+  let minDist = 3.5;
+  LOCATIONS.forEach(loc => {
+    const d = player.position.distanceTo(loc.pos);
+    if (d < minDist) { minDist = d; closest = loc; }
+  });
+  nearbyLocation = closest;
+
+  const locName = closest ? closest.name : 'Area Terbuka';
+  document.getElementById('hud-location').textContent = locName;
+
+  const btn = document.getElementById('btn-interact');
+  if (closest) {
+    btn.style.borderColor = '#00ff88';
+    btn.style.color = '#00ff88';
+    btn.style.boxShadow = '0 0 25px rgba(0, 255, 136, 0.6)';
+  } else {
+    btn.style.borderColor = '#00d4ff';
+    btn.style.color = '#00d4ff';
+    btn.style.boxShadow = '0 0 20px rgba(0, 212, 255, 0.3)';
+  }
+}
+
+function tryInteract() {
+  if (!nearbyLocation) {
+    showToast('Dekati lokasi untuk berinteraksi', true);
+    return;
+  }
+  const loc = nearbyLocation;
+  if (loc.id === 'materi') {
+    renderMateri();
+    openModal('modal-materi');
+  } else if (loc.id === 'simulasi') {
+    openModal('modal-simulasi');
+  } else if (loc.id === 'kuis') {
+    if (!state.materiRead) {
+      showToast('Baca materi di Pusat Pelatihan dulu! 📘', true);
+      return;
+    }
+    if (state.quizProgress >= KUIS.length) {
+      openModal('modal-reward');
+      return;
+    }
+    renderQuiz();
+    openModal('modal-kuis');
+  }
+}
+
+document.getElementById('btn-interact').addEventListener('click', tryInteract);
+
+// Jump button (efek visual)
+document.getElementById('btn-jump').addEventListener('click', () => {
+  const startY = player.position.y;
+  let t = 0;
+  const jumpAnim = () => {
+    t += 0.06;
+    const y = Math.sin(Math.min(t * Math.PI, Math.PI)) * 1.2;
+    player.position.y = startY + y;
+    if (t < 1) requestAnimationFrame(jumpAnim);
+    else player.position.y = startY;
+  };
+  jumpAnim();
+});
+
+/* =========================================================
+   19. ANIMASI LOOP
+   ========================================================= */
+const clock = new THREE.Clock();
+
+function animate(now) {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.1);
+
+  // Input gerakan (keyboard + D-Pad)
+  let mx = 0, mz = 0;
+  if (keys.w || dpadState.up)    mz -= 1;
+  if (keys.s || dpadState.down)  mz += 1;
+  if (keys.a || dpadState.left)  mx -= 1;
+  if (keys.d || dpadState.right) mx += 1;
+
+  const mag = Math.hypot(mx, mz);
+  if (mag > 0.05) {
+    const nx = mx / mag;
+    const nz = mz / mag;
+    player.position.x += nx * playerSpeed * dt;
+    player.position.z += nz * playerSpeed * dt;
+    player.position.x = Math.max(-playerBounds, Math.min(playerBounds, player.position.x));
+    player.position.z = Math.max(-playerBounds, Math.min(playerBounds, player.position.z));
+
+    // Rotasi karakter
+    const targetAngle = Math.atan2(nx, nz);
+    let diff = targetAngle - player.rotation.y;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    player.rotation.y += diff * Math.min(1, dt * 12);
+  }
+
+  // Efek floating karakter
+  player.position.y = Math.sin(now * 0.003) * 0.05;
+
+  // Rotasi ring player
+  playerRing.rotation.z += dt * 0.5;
+
+  // Animasi ikon lokasi
+  LOCATIONS.forEach(loc => {
+    if (loc.iconMesh) {
+      loc.iconMesh.rotation.y += dt * 1.5;
+      loc.iconMesh.position.y = 2.8 + Math.sin(now * 0.002 + loc.iconMesh.userData.floatOffset) * 0.15;
+    }
+  });
+
+  // Partikel bergerak
+  particles.rotation.y += dt * 0.02;
+
+  // Cek lokasi terdekat
+  checkNearby();
+
+  // Update kamera target
+  controls.target.lerp(
+    new THREE.Vector3(player.position.x, player.position.y + 1.5, player.position.z),
+    0.08
+  );
+
+  // Simulasi fisika
+  updateSimulation(now);
+
+  // Render
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+/* =========================================================
+   20. RESIZE
+   ========================================================= */
+function onResize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  labelRenderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 300));
+
+/* =========================================================
+   21. INIT
+   ========================================================= */
+loadState();
+
+setTimeout(() => {
+  document.getElementById('loading').classList.add('hide');
+  setTimeout(() => {
+    document.getElementById('loading').style.display = 'none';
+  }, 500);
+  showToast('Selamat datang! Gunakan tombol panah untuk bergerak 🎮');
+}, 800);
+
+animate(performance.now());
+
+window.renderQuiz = renderQuiz;
+</script>
+
+</body>
+</html>
